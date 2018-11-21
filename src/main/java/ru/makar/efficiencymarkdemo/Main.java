@@ -1,5 +1,6 @@
 package ru.makar.efficiencymarkdemo;
 
+import lombok.extern.slf4j.Slf4j;
 import ru.makar.efficiencymarkdemo.model.data.DataRow;
 import ru.makar.efficiencymarkdemo.model.data.ParsedDataRow;
 import ru.makar.efficiencymarkdemo.model.efficiency.EfficiencyMark;
@@ -31,16 +32,22 @@ import static java.time.DayOfWeek.SATURDAY;
 import static java.time.DayOfWeek.SUNDAY;
 import static ru.makar.efficiencymarkdemo.model.data.RowType.CLOSE_AT_STOP;
 
+@Slf4j
 public class Main {
     private static final String RESULTS_DIR = "data/results/";
     private static final String HISTORY_FILE = "data/history/EURUSD.hst";
-    private static final String OUTPUT_PATH = "data/output/results.txt";
+    private static final String OUTPUT_PATH = "data/output/report.txt";
     private static final Double LOT_SIZE = 100000.0;
     private static final Integer LEVERAGE = 200;
 
     public static void main(String[] args) throws IOException {
+        log.info("read history from {}", HISTORY_FILE);
         HistoryData history = new HistoryFile(HISTORY_FILE).read(2018);
+        log.info("history was read successfully");
+        log.info("header: {}", history.getHeader());
+        log.info("bars: {}", history.getBars().size());
         List<String> results = new LinkedList<>();
+        log.info("scan result directory {}", RESULTS_DIR);
         Files.newDirectoryStream(Paths.get(RESULTS_DIR)).forEach(path -> {
             try {
                 EfficiencyMark mark = mark(history, path);
@@ -51,29 +58,35 @@ public class Main {
             }
         });
         Path outputPath = Paths.get(OUTPUT_PATH);
+        log.info("all results processed, writing it to report {}", outputPath);
         if (Files.exists(outputPath)) {
+            log.info("file exists, remove it");
             Files.delete(outputPath);
         }
         Files.write(outputPath, results, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        log.info("complete");
     }
 
     private static EfficiencyMark mark(HistoryData history, Path file) throws IOException {
+        log.info("read result file {}", file);
         List<DataRow> data = Files.readAllLines(file)
                 .stream()
                 .map(ParsedDataRow::new)
                 .map(ParsedDataRow::parse)
                 .collect(Collectors.toList());
+        log.info("{} rows was read and parsed", data.size());
+        log.info("filtering data...");
         List<Long> filteredTickets = data.stream()
                 .filter(row -> row.getType() == CLOSE_AT_STOP)
                 .map(DataRow::getTicket)
                 .sorted()
                 .collect(Collectors.toList());
-        System.out.println("filtered tickets:");
-        System.out.println(filteredTickets.stream().map(Objects::toString).collect(Collectors.joining(", ")));
-        System.out.println("filtered tickets count: " + filteredTickets.size());
+        log.info("filtered tickets: {}", filteredTickets.stream().map(Objects::toString).collect(Collectors.joining(", ")));
+        log.info("filtered tickets count: {}", filteredTickets.size());
         List<DataRow> filteredData = data.stream()
                 .filter(item -> !filteredTickets.contains(item.getTicket()))
                 .collect(Collectors.toList());
+        log.info("filtered data size: {}", filteredData.size());
         Orders orders = new Orders();
         filteredData.forEach(orders::addInfo);
         SimpleEfficiencyMark mark = new SimpleEfficiencyMark();
@@ -84,7 +97,10 @@ public class Main {
                 .toLocalDate()
                 .plusMonths(1)
                 .withDayOfMonth(1);
+        log.info("system work period: [{} - {}]", startDate, endDate);
         long n = ChronoUnit.MONTHS.between(startDate, endDate);
+        log.info("total month: {}", n);
+        log.info("calculate efficiency...");
         mark.setTotalProfit(list.stream().mapToDouble(Order::getProfit).filter(value -> value >= 0).sum());
         mark.setTotalLoss(list.stream().mapToDouble(Order::getProfit).filter(value -> value < 0).sum());
         mark.setProfitOrdersCount(list.stream().filter(order -> order.getProfit() >= 0).count());
@@ -101,6 +117,7 @@ public class Main {
                 .mapToLong(Main::duration)
                 .average()
                 .orElse(0));
+        log.info("efficiency calculated");
         return mark;
     }
 
