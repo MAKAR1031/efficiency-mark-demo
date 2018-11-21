@@ -19,6 +19,7 @@ import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
@@ -42,62 +43,21 @@ public class Main {
         List<String> results = new LinkedList<>();
         Files.newDirectoryStream(Paths.get(RESULTS_DIR)).forEach(path -> {
             try {
-                //TODO: определить количество месяцев работы системы
-                EfficiencyMark mark = mark(history, path, 12);
-                String result = String.valueOf(mark.totalProfit()) +
-                        ";" +
-                        mark.totalLoss() +
-                        ";" +
-                        mark.totalResult() +
-                        ";" +
-                        mark.profitOrdersCount() +
-                        ";" +
-                        mark.lossOrdersCount() +
-                        ";" +
-                        mark.ordersCount() +
-                        ";" +
-                        mark.maxProfitOrdersInRow() +
-                        ";" +
-                        mark.maxLossOrdersInRow() +
-                        ";" +
-                        mark.maxProfit() +
-                        ";" +
-                        mark.maxLoss() +
-                        ";" +
-                        mark.profitLossRatio() +
-                        ";" +
-                        mark.averageProfit() +
-                        ";" +
-                        mark.averageLoss() +
-                        ";" +
-                        mark.averageResult() +
-                        ";" +
-                        mark.averageProfitLossRatio() +
-                        ";" +
-                        mark.midd() +
-                        ";" +
-                        mark.minimumDeposit() +
-                        ";" +
-                        mark.returnValue() +
-                        ";" +
-                        mark.recoveryFactor() +
-                        ";" +
-                        mark.profitFactor() +
-                        ";" +
-                        mark.stopLossOrdersCount() +
-                        ";" +
-                        mark.stopLossManagementFactor() +
-                        ";" +
-                        mark.averageOrderDuration();
+                EfficiencyMark mark = mark(history, path);
+                String result = mark.toString().replaceAll("\\.", ",");
                 results.add(result);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         });
-        Files.write(Paths.get(OUTPUT_PATH), results, StandardOpenOption.CREATE_NEW);
+        Path outputPath = Paths.get(OUTPUT_PATH);
+        if (Files.exists(outputPath)) {
+            Files.delete(outputPath);
+        }
+        Files.write(outputPath, results, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 
-    private static EfficiencyMark mark(HistoryData history, Path file, int n) throws IOException {
+    private static EfficiencyMark mark(HistoryData history, Path file) throws IOException {
         List<DataRow> data = Files.readAllLines(file)
                 .stream()
                 .map(ParsedDataRow::new)
@@ -118,6 +78,13 @@ public class Main {
         filteredData.forEach(orders::addInfo);
         SimpleEfficiencyMark mark = new SimpleEfficiencyMark();
         List<Order> list = orders.list();
+        LocalDate startDate = list.get(0).getOpenTime().toLocalDate().withDayOfMonth(1);
+        LocalDate endDate = list.get(list.size() - 1)
+                .getCloseTime()
+                .toLocalDate()
+                .plusMonths(1)
+                .withDayOfMonth(1);
+        long n = ChronoUnit.MONTHS.between(startDate, endDate);
         mark.setTotalProfit(list.stream().mapToDouble(Order::getProfit).filter(value -> value >= 0).sum());
         mark.setTotalLoss(list.stream().mapToDouble(Order::getProfit).filter(value -> value < 0).sum());
         mark.setProfitOrdersCount(list.stream().filter(order -> order.getProfit() >= 0).count());
@@ -157,12 +124,15 @@ public class Main {
         double max = 0;
         for (Order order : orders) {
             double extremum = findExtremum(history, order.getType(), order.getOpenTime(), order.getCloseTime());
+            if (extremum == 0) {
+                continue;
+            }
             double contract = order.getVolume() * LOT_SIZE;
             double value = "sell".equals(order.getType()) ?
                     contract * order.getOpenPrice() - contract * extremum :
                     contract * extremum - contract * order.getOpenPrice();
-            if (value > max) {
-                max = value;
+            if (value < 0 && Math.abs(value) > max) {
+                max = Math.abs(value);
             }
         }
         return max;
@@ -200,16 +170,14 @@ public class Main {
         return history.getBars().stream()
                 .filter(b -> b.getOpenTime().isAfter(openTime))
                 .filter(b -> b.getOpenTime().isBefore(closeTime))
-                .mapToDouble(HistoryBar::getHigh)
+                .mapToDouble(HistoryBar::getLow)
                 .min()
                 .orElse(0);
     }
 
     private static double calculateMinDeposit(List<Order> orders) {
         Order order = orders.stream().max(Comparator.comparing(Order::getVolume)).orElseThrow(RuntimeException::new);
-        double value = LOT_SIZE * order.getVolume() / LEVERAGE * order.getOpenPrice();
-        System.out.println("min depo: " + value);
-        return value;
+        return LOT_SIZE * order.getVolume() / LEVERAGE * order.getOpenPrice();
     }
 
     private static long duration(Order order) {

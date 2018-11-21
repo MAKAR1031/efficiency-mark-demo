@@ -132,4 +132,53 @@ public class SimpleEfficiencyMark implements EfficiencyMark {
     public Double averageOrderDuration() {
         return averageOrderDuration;
     }
+
+    @Override
+    public String toString() {
+        return String.valueOf(totalProfit()) +
+                ";" +
+                totalLoss() +
+                ";" +
+                totalResult() +
+                ";" +
+                profitOrdersCount() +
+                ";" +
+                lossOrdersCount() +
+                ";" +
+                ordersCount() +
+                ";" +
+                maxProfitOrdersInRow() +
+                ";" +
+                maxLossOrdersInRow() +
+                ";" +
+                maxProfit() +
+                ";" +
+                maxLoss() +
+                ";" +
+                profitLossRatio() +
+                ";" +
+                averageProfit() +
+                ";" +
+                averageLoss() +
+                ";" +
+                averageResult() +
+                ";" +
+                averageProfitLossRatio() +
+                ";" +
+                midd() +
+                ";" +
+                minimumDeposit() +
+                ";" +
+                returnValue() +
+                ";" +
+                recoveryFactor() +
+                ";" +
+                profitFactor() +
+                ";" +
+                stopLossOrdersCount() +
+                ";" +
+                stopLossManagementFactor() +
+                ";" +
+                averageOrderDuration();
+    }
 }
